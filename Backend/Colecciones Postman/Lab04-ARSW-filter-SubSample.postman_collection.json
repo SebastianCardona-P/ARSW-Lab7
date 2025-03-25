@@ -1,0 +1,98 @@
+{
+	"info": {
+		"_postman_id": "f1aa6ab1-7729-4a8a-a0f1-1c73e50acd2a",
+		"name": "Lab04-ARSW-filter-SubSample",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "38494414"
+	},
+	"item": [
+		{
+			"name": "Get All Blueprints ",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/blueprints",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"blueprints"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Create A New BluePrint",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"author\": \"Juan\",\r\n    \"name\": \"Proyecto1\",\r\n    \"points\": [\r\n        {\"x\": 47, \"y\": 15},\r\n        {\"x\": 10, \"y\": 70},\r\n        {\"x\":47, \"y\":15},\r\n        {\"x\":16, \"y\":24},\r\n        {\"x\":17, \"y\":2},\r\n        {\"x\": 71, \"y\": 240},\r\n        {\"x\": 10, \"y\": 10}\r\n    ]\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/blueprints",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"blueprints"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Ge BluePrint By Author And Name",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/blueprints/Juan/Proyecto1",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"blueprints",
+						"Juan",
+						"Proyecto1"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get BluePrint By Author",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/blueprints/Juan",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"blueprints",
+						"Juan"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

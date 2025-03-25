@@ -1,0 +1,24 @@
+•¿Qué condiciones de carrera se podrían presentar?
+
+	Las condiciones de carrera pueden producirse cuando simultáneamente varios hilos 	acceden y modifican la estructura de datos compartida sin la debida sincronización. 	En este caso, el mapa de blueprints podría estar sujeto a inconsistencias en los e	scenarios siguientes:
+
+	o	La adición simultánea de un mismo blueprint: dos hilos podrían añadir el 	mismo blueprint al mismo tiempo.
+	o	La modificación y la lectura concurrente: un hilo podría leer un blueprint 	mientras que otro lo modifica, dando lugar a datos inconsistentes.
+	o	La eliminación y la lectura simultáneas: un hilo podría eliminar un 	blueprint mientras este es consultado por otro hilo, desencadenando errores.
+
+•¿Cuáles son las respectivas regiones críticas?
+
+	Las regiones críticas donde pueden ocurrir condiciones de carrera son:
+
+	o	Método saveBlueprint: Se necesita garantizar que no se sobrescriba un 	blueprint existente.
+	o	Método updateBlueprint: Se debe asegurar que la actualización solo ocurra 	si el blueprint ya existe.
+	o	Método getBlueprintsByAuthor y getAllBlueprints: Se requiere evitar la 	lectura de datos inconsistentes si hay modificaciones simultáneas.
+
+•Solución
+
+	Para evitar estas condiciones de carrera sin afectar el rendimiento, se aplicaron 	las siguientes soluciones:
+
+	o	Uso de ConcurrentHashMap: Maneja acceso concurrente sin bloqueos pesados.
+	o	putIfAbsent en saveBlueprint: Garantiza que la inserción sea atómica y 	evita sobrescrituras.
+	o	replace en updateBlueprint: Asegura que un blueprint solo se actualice si 	ya existe.
+	o	Copia segura en operaciones de lectura: getAllBlueprints() y 	getBlueprintsByAuthor() devuelven copias de los datos para evitar inconsistencias

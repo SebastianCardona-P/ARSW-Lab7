@@ -1,0 +1,98 @@
+{
+	"info": {
+		"_postman_id": "50b028ae-9be6-4563-aebd-59808b97f611",
+		"name": "Lab04-ARSW-filter-Redundancy",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "38494414"
+	},
+	"item": [
+		{
+			"name": "Get All BluePrints",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/blueprints",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"blueprints"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Create A New BuePrint",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"author\": \"Pepe\",\r\n    \"name\": \"Lab04\",\r\n    \"points\": [\r\n        {\"x\": 5, \"y\": 15},\r\n        {\"x\": 25, \"y\": 35},\r\n        {\"x\":60, \"y\":40},\r\n        {\"x\":60, \"y\":40},\r\n        {\"x\":60, \"y\":60},\r\n        {\"x\": 40, \"y\": 130},\r\n        {\"x\": 40, \"y\": 130},\r\n        {\"x\": 20, \"y\": 10},\r\n        {\"x\": 70, \"y\": 70},\r\n        {\"x\": 70, \"y\": 70}\r\n    ]\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/blueprints",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"blueprints"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get By Author and BluePrint name",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/blueprints/Pepe/Lab04",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"blueprints",
+						"Pepe",
+						"Lab04"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Get BluePrint By Author",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/blueprints/Pepe",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"blueprints",
+						"Pepe"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
