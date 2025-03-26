@@ -57,7 +57,7 @@ const Blueprints = () => {
     });
 
     return () => {
-      unsubscribe(); // Clean up subscription
+      unsubscribe();
       disconnectStomp();
     };
   }, []);
@@ -87,7 +87,6 @@ const Blueprints = () => {
       let canvasX = 0,
         canvasY = 0;
 
-      // Detect mouse click or touch event
       if (event.type === "click") {
         const rect = canvas.getBoundingClientRect();
         canvasX = (event as MouseEvent).clientX - rect.left;
@@ -102,16 +101,13 @@ const Blueprints = () => {
         canvasY = touch.clientY - rect.top;
       }
 
-      // Handle new blueprint creation with different scaling
       const { minX, minY, scale, margin } = scaleParams.current;
 
-      // Function to transform coordinates
       const inverseTransform = (
         canvasCoord: number,
         min: number,
         scale: number
       ) => {
-        // For new blueprints, use absolute coordinates
         if (isCreatingNewBlueprint) {
           return canvasCoord;
         }
@@ -121,7 +117,6 @@ const Blueprints = () => {
       const originalX = inverseTransform(canvasX, minX, scale);
       const originalY = inverseTransform(canvasY, minY, scale);
 
-      // Create a new point with the coordinates
       const newPoint: Point = {
         x: parseFloat(originalX.toFixed(2)),
         y: parseFloat(originalY.toFixed(2)),
@@ -129,12 +124,9 @@ const Blueprints = () => {
 
       console.log(`Adding new point: x=${newPoint.x}, y=${newPoint.y}`);
 
-      // Store the point as the last sent point to avoid duplicates
       lastSentPoint.current = newPoint;
 
-      // Publish point to WebSocket
       sendPoint(newPoint);
-
       setBlueprintModified(true);
     },
     [selectedBlueprint, isCreatingNewBlueprint]
@@ -150,13 +142,25 @@ const Blueprints = () => {
         "2d"
       ) as CanvasRenderingContext2D;
 
-      // Clear the canvas
+      // Always clear the canvas, even if there are no points
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // Combine local and collaborative points
       const allPoints = [...points, ...collaborativePoints];
 
-      if (allPoints.length === 0) return;
+      // If there are no points, just return after clearing the canvas
+      if (allPoints.length === 0) {
+        // For new blueprints, reset scaling parameters
+        if (isCreatingNewBlueprint) {
+          scaleParams.current = {
+            minX: 0,
+            minY: 0,
+            scale: 1,
+            margin: 10,
+          };
+        }
+        return;
+      }
 
       // Calculate scaling
       const margin = 10;
@@ -166,21 +170,6 @@ const Blueprints = () => {
       const minY = Math.min(...Yvalues);
       const maxX = Math.max(...Xvalues);
       const minX = Math.min(...Xvalues);
-
-      // Special handling for new blueprint with no points
-      if (
-        isCreatingNewBlueprint &&
-        points.length === 0 &&
-        collaborativePoints.length === 0
-      ) {
-        scaleParams.current = {
-          minX: 0,
-          minY: 0,
-          scale: 1,
-          margin: 10,
-        };
-        return;
-      }
 
       const scale = Math.min(
         (canvas.width - margin * 2) / (maxX - minX || 1),
@@ -197,7 +186,6 @@ const Blueprints = () => {
 
       // Transform coordinates to draw the blueprint
       const transcoord = (coord: number, min: number, scale: number) => {
-        // For new blueprints, use absolute coordinates
         if (isCreatingNewBlueprint) {
           return coord;
         }
@@ -231,12 +219,11 @@ const Blueprints = () => {
           2 * Math.PI
         );
 
-        // Color the points
-        let fillColor = "#e74c3c"; // Default red
+        let fillColor = "#e74c3c";
         if (index === 0) {
-          fillColor = "#2ecc71"; // First point green
+          fillColor = "#2ecc71";
         } else if (index === allPoints.length - 1 && blueprintModified) {
-          fillColor = "#3498db"; // Last point blue if recently added
+          fillColor = "#3498db";
         }
 
         ctx.fillStyle = fillColor;
@@ -248,25 +235,18 @@ const Blueprints = () => {
 
   // New function to handle creating a new blueprint
   const handleCreateNewBlueprint = useCallback(() => {
-    // Prompt for blueprint name
     const newBlueprintName = window.prompt(
       "Ingrese el nombre del nuevo blueprint:"
     );
 
     if (newBlueprintName) {
-      // Clear the canvas and reset points
-      const canvas = canvasReference.current;
-      if (canvas) {
-        const ctx = canvas.getContext("2d");
-        ctx?.clearRect(0, 0, canvas.width, canvas.height);
-      }
-
       // Set up state for new blueprint
-      setSelectedBlueprint({
+      const newBlueprint = {
         name: newBlueprintName,
         author: author,
         points: [],
-      });
+      };
+      setSelectedBlueprint(newBlueprint);
       setUpdatedPoints([]);
       setCollaborativePoints([]);
       setBlueprintModified(false);
@@ -277,11 +257,10 @@ const Blueprints = () => {
     }
   }, [author]);
 
-  // useEffect to redraw the blueprint when points are updated
+  // useEffect to redraw the blueprint when points or selectedBlueprint changes
   useEffect(() => {
-    if (updatedPoints.length > 0) {
-      drawBlueprint(updatedPoints);
-    }
+    // Always redraw, even if updatedPoints is empty, to handle new blueprints
+    drawBlueprint(updatedPoints);
   }, [updatedPoints, collaborativePoints, drawBlueprint]);
 
   // Setup event listeners when the modal is opened
@@ -291,11 +270,9 @@ const Blueprints = () => {
 
     console.log("Adding event listeners to canvas");
 
-    // Remove any existing listeners first to prevent duplicates
     canvas.removeEventListener("click", handleCanvasClick);
     canvas.removeEventListener("touchstart", handleCanvasClick);
 
-    // Add the listeners
     canvas.addEventListener("click", handleCanvasClick);
     canvas.addEventListener("touchstart", handleCanvasClick);
   }, [handleCanvasClick]);
@@ -358,7 +335,6 @@ const Blueprints = () => {
   const saveUpdatedBlueprint = useCallback(async () => {
     if (!selectedBlueprint || !blueprintModified) return;
 
-    // Determine if this is a new blueprint or an update
     const isNewBlueprint = isCreatingNewBlueprint;
     const { author, name } = selectedBlueprint;
 
@@ -371,7 +347,6 @@ const Blueprints = () => {
     try {
       let response;
       if (isNewBlueprint) {
-        // POST request for new blueprint
         response = await fetch(`http://localhost:8080/blueprints`, {
           method: "POST",
           headers: {
@@ -380,7 +355,6 @@ const Blueprints = () => {
           body: JSON.stringify(blueprintToSave),
         });
       } else {
-        // PUT request for existing blueprint
         response = await fetch(
           `http://localhost:8080/blueprints/${author}/${name}`,
           {
@@ -397,26 +371,20 @@ const Blueprints = () => {
         throw new Error("Error saving blueprint");
       }
 
-      // Update local state
       if (isNewBlueprint) {
-        // Add the new blueprint to the list
         setBlueprints((prevBlueprints) => [...prevBlueprints, blueprintToSave]);
       } else {
-        // Update existing blueprint
         const updatedBlueprints = blueprints.map((bp) =>
           bp.name === name ? { ...bp, points: updatedPoints } : bp
         );
         setBlueprints(updatedBlueprints);
       }
 
-      // Reset state
       setBlueprintModified(false);
       setIsCreatingNewBlueprint(false);
       setCollaborativePoints([]);
 
       handleGetBlueprints();
-
-      // Close the modal
       setModalIsOpen(false);
     } catch (error) {
       console.error("Error saving blueprint:", error);
@@ -431,7 +399,7 @@ const Blueprints = () => {
     isCreatingNewBlueprint,
   ]);
 
-  //Function to delete a blueprint
+  // Function to delete a blueprint
   const deleteBlueprint = useCallback(
     async (blueprint: Blueprint) => {
       if (!blueprint) return;
@@ -450,15 +418,12 @@ const Blueprints = () => {
           throw new Error("Error deleting blueprint");
         }
 
-        // Update local state
         const updatedBlueprints = blueprints.filter(
           (bp) => bp.name !== name || bp.author !== author
         );
         setBlueprints(updatedBlueprints);
 
-        // Reset selected blueprint
         setSelectedBlueprint(null);
-
         handleGetBlueprints();
         setModalIsOpen(false);
       } catch (error) {
@@ -477,7 +442,6 @@ const Blueprints = () => {
   const closeModal = useCallback(() => {
     setModalIsOpen(false);
     cleanupCanvasListeners();
-    // Ask to save changes if blueprint is modified
     if (blueprintModified) {
       if (
         window.confirm("¿Desea guardar los cambios realizados al blueprint?")
@@ -491,7 +455,6 @@ const Blueprints = () => {
     <div>
       <h1>Gestión de Blueprints</h1>
 
-      {/* Campo para capturar el autor */}
       <input
         type="text"
         placeholder="Ingrese el nombre del autor"
@@ -500,10 +463,8 @@ const Blueprints = () => {
       />
       <button onClick={handleGetBlueprints}>Get Blueprints</button>
 
-      {/* Mostrar error si existe */}
       {error && <p style={{ color: "red" }}>{error}</p>}
 
-      {/* New 'Crear' button, only enabled when an author is selected */}
       {author && (
         <button
           onClick={handleCreateNewBlueprint}
@@ -513,7 +474,6 @@ const Blueprints = () => {
         </button>
       )}
 
-      {/* Mostrar nombre del autor seleccionado */}
       {blueprints.length > 0 && (
         <>
           <h2>Autor: {author}</h2>
@@ -565,9 +525,7 @@ const Blueprints = () => {
           }}
           onAfterOpen={() => {
             if (selectedBlueprint) {
-              // Inicializar updatedPoints con los puntos del blueprint
               setUpdatedPoints([...selectedBlueprint.points]);
-              // Dibujar el blueprint usando la función separada
               setTimeout(() => {
                 drawBlueprint(selectedBlueprint.points);
                 setupCanvasListeners();
@@ -583,7 +541,7 @@ const Blueprints = () => {
               height={500}
               style={{
                 border: "1px solid #000",
-                zIndex: 10, // Ensure the canvas is on top
+                zIndex: 10,
               }}
             ></canvas>
             <div
