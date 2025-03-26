@@ -5,6 +5,7 @@ import edu.eci.arsw.blueprints.persistence.*;
 import edu.eci.arsw.blueprints.services.*;
 import org.springframework.beans.factory.annotation.*;
 import org.springframework.http.*;
+import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
@@ -79,18 +80,16 @@ public class BluePrintController {
      */
     @PostMapping
     @Operation(summary = "Registrar un nuevo blueprint", description = "Añade un nuevo blueprint al sistema.")
-    public ResponseEntity<?> registerBlueprint(@RequestBody Blueprint bp){
-        HashMap<String, Object> response = new HashMap<>();
+    public ResponseEntity<?> registerBlueprint(@RequestBody Blueprint bp) {
         try {
             bps.addNewBlueprint(bp);
-            response.put("status", "success");
-            return ResponseEntity.status(HttpStatus.OK).body(response);
+            return ResponseEntity.status(HttpStatus.OK).body(bp);
         } catch (BlueprintPersistenceException e) {
-            response.put("error", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error registering blueprint: " + e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An unexpected error occurred: " + e.getMessage());
         }
     }
-
     /**
      * Obtiene todos los blueprints disponibles en el sistema.
      * @return Conjunto de blueprints.
@@ -142,10 +141,16 @@ public class BluePrintController {
 
     /**
      * Endpoint STOMP para recibir un nuevo punto y enviarlo a todos los suscriptores
+     * del topic "/topic/newpoint/{author}/{name}".
+     * @param author Nombre del autor.
+     * @param name Nombre del blueprint.
+     * @param point Punto a enviar.
      */
-    @MessageMapping("/newpoint") // El destino para recibir el mensaje
-    public void handleNewPoint(Point point) {
-        // Enviar el punto a todos los suscriptores del topic "/topic/newpoint"
-        simpMessagingTemplate.convertAndSend("/topic/newpoint", point);
+    @MessageMapping("/newpoint/{author}/{name}") // El destino para recibir el mensaje
+    public void handleNewPoint(@DestinationVariable("author") String author, @DestinationVariable("name") String name, Point point) {
+        // Enviar el punto a todos los suscriptores del topic "/topic/newpoint/{author}/{name}"
+        System.out.println("Enviando punto: " + point + " a /topic/newpoint/" + author + "/" + name);
+
+        simpMessagingTemplate.convertAndSend("/topic/newpoint/" + author + "/" + name, point);
     }
 }

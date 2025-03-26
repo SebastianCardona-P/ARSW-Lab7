@@ -34,7 +34,7 @@ public class BlueprintsServices {
      * @return Un conjunto de todos los blueprints filtrados.
      */
     public Set<Blueprint> getAllBlueprints(){
-        return filter.filterBlueprints(bpp.getAllBluePrints());
+        return bpp.getAllBluePrints();
     }
 
     /**
@@ -67,7 +67,7 @@ public class BlueprintsServices {
      * @throws BlueprintNotFoundException si no se encuentra el blueprint.
      */
     public Blueprint updateBlueprint(String author, String name, Blueprint blueprint) throws BlueprintNotFoundException {
-        return filter.filterPlain(bpp.updateBlueprint(author, name, blueprint));
+        return bpp.updateBlueprint(author, name, blueprint);
     }
 
     /**

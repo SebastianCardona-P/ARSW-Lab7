@@ -18,75 +18,97 @@ const stompClient = new Client({
   },
 });
 
-export const connectStomp = () => {
+// Helper function to wait for the STOMP client to connect
+const waitForConnection = () => {
+  return new Promise<void>((resolve, reject) => {
+    if (stompClient.connected) {
+      resolve();
+    } else {
+      stompClient.onConnect = () => {
+        console.log("STOMP client connected");
+        resolve();
+      };
+      stompClient.onStompError = (frame) => {
+        console.error("STOMP connection error:", frame);
+        reject(new Error("Failed to connect to STOMP: " + frame));
+      };
+    }
+  });
+};
+
+export const connectStomp = async () => {
   if (!stompClient.active) {
+    console.log("Activating STOMP client...");
     stompClient.activate();
+    await waitForConnection();
   } else {
     console.log("STOMP client is already active");
   }
 };
 
-export const subscribeToNewPoints = (
+export const subscribeToNewPoints = async (
+  author: string,
+  name: string,
   callback: (point: { x: number; y: number }) => void
 ) => {
   let subscription: { unsubscribe: () => void } | null = null;
 
-  const subscribe = () => {
-    if (stompClient.connected && !subscription) {
-      subscription = stompClient.subscribe(
-        "/topic/newpoint",
-        (message: IMessage) => {
-          try {
-            const point = JSON.parse(message.body);
-            if (point.x !== undefined && point.y !== undefined) {
-              callback(point);
-            } else {
-              console.warn("Invalid point received:", point);
-            }
-          } catch (error) {
-            console.error("Error parsing message body:", error);
-          }
-        }
-      );
-      console.log("Subscribed to /topic/newpoint");
-    }
-  };
+  const topic = `/topic/newpoint/${author}/${name}`;
+  console.log(`Attempting to subscribe to ${topic}`);
 
-  if (stompClient.connected) {
-    subscribe();
-  } else {
-    stompClient.onConnect = () => {
-      console.log("STOMP client connected, subscribing to /topic/newpoint");
-      subscribe();
-    };
-    console.warn("STOMP client not connected, will subscribe after connection");
+  // Ensure the STOMP client is connected before subscribing
+  if (!stompClient.connected) {
+    await connectStomp();
   }
 
-  // Return cleanup function
+  // Now that the client is connected, subscribe
+  if (stompClient.connected && !subscription) {
+    subscription = stompClient.subscribe(topic, (message: IMessage) => {
+      console.log(`Received message on ${topic}:`, message.body);
+      try {
+        const point = JSON.parse(message.body);
+        if (point.x !== undefined && point.y !== undefined) {
+          callback(point);
+        } else {
+          console.warn("Invalid point received:", point);
+        }
+      } catch (error) {
+        console.error("Error parsing message body:", error);
+      }
+    });
+    console.log(`Successfully subscribed to ${topic}`);
+  } else {
+    console.warn(
+      "Cannot subscribe: STOMP client not connected or subscription already exists"
+    );
+  }
+
   return () => {
     if (subscription) {
       subscription.unsubscribe();
-      console.log("Unsubscribed from /topic/newpoint");
+      console.log(`Unsubscribed from ${topic}`);
       subscription = null;
     }
   };
 };
 
-export const sendPoint = (point: { x: number; y: number }) => {
+export const sendPoint = async (
+  author: string,
+  name: string,
+  point: { x: number; y: number }
+) => {
+  const destination = `/app/newpoint/${author}/${name}`;
+  if (!stompClient.connected) {
+    await connectStomp();
+  }
   if (stompClient.connected) {
     stompClient.publish({
-      destination: "/app/newpoint",
+      destination,
       body: JSON.stringify(point),
     });
+    console.log(`Sent point to ${destination}:`, point);
   } else {
-    console.warn("STOMP client not connected, will send after connection");
-    stompClient.onConnect = () => {
-      console.log("STOMP client connected, sending point:", point);
-      stompClient.publish({
-        destination: "/app/newpoint",
-        body: JSON.stringify(point),
-      });
-    };
+    console.error("STOMP client failed to connect, cannot send point:", point);
   }
 };
 

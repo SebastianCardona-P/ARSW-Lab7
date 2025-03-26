@@ -37,30 +37,7 @@ const Blueprints = () => {
   const [collaborativePoints, setCollaborativePoints] = useState<Point[]>([]);
   const canvasReference = useRef<HTMLCanvasElement | null>(null);
   const lastSentPoint = useRef<Point | null>(null);
-
-  // Connect to WebSocket when component mounts
-  useEffect(() => {
-    connectStomp();
-
-    const unsubscribe = subscribeToNewPoints((point: Point) => {
-      console.log("Received collaborative point:", point);
-      if (
-        lastSentPoint.current &&
-        lastSentPoint.current.x === point.x &&
-        lastSentPoint.current.y === point.y
-      ) {
-        console.log("Ignoring point sent by this client");
-        lastSentPoint.current = null;
-        return;
-      }
-      setCollaborativePoints((prevPoints) => [...prevPoints, point]);
-    });
-
-    return () => {
-      unsubscribe();
-      disconnectStomp();
-    };
-  }, []);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
   // scaleParams to store scaling parameters
   const scaleParams = useRef({
@@ -70,17 +47,19 @@ const Blueprints = () => {
     margin: 10,
   });
 
-  // Reset state when modal is opened with a new blueprint
+  // Reset state when a new blueprint is selected
   useEffect(() => {
     if (selectedBlueprint) {
       setUpdatedPoints([...selectedBlueprint.points]);
       setCollaborativePoints([]);
       setBlueprintModified(false);
+    } else {
+      setCollaborativePoints([]); // Clear any points if no blueprint is selected
     }
   }, [selectedBlueprint]);
 
   const handleCanvasClick = useCallback(
-    (event: MouseEvent | TouchEvent) => {
+    async (event: MouseEvent | TouchEvent) => {
       const canvas = canvasReference.current;
       if (!canvas || !selectedBlueprint) return;
 
@@ -126,10 +105,24 @@ const Blueprints = () => {
 
       lastSentPoint.current = newPoint;
 
-      sendPoint(newPoint);
+      // Add the point locally to collaborativePoints only if it doesn't already exist
+      if (
+        !collaborativePoints.some(
+          (p) => p.x === newPoint.x && p.y === newPoint.y
+        )
+      ) {
+        setCollaborativePoints((prevPoints) => [...prevPoints, newPoint]);
+      }
+
+      // Send the point to the dynamic topic
+      await sendPoint(
+        selectedBlueprint.author,
+        selectedBlueprint.name,
+        newPoint
+      );
       setBlueprintModified(true);
     },
-    [selectedBlueprint, isCreatingNewBlueprint]
+    [selectedBlueprint, isCreatingNewBlueprint, collaborativePoints]
   );
 
   // Function to draw the blueprint on the canvas
@@ -287,12 +280,18 @@ const Blueprints = () => {
     canvas.removeEventListener("touchstart", handleCanvasClick);
   }, [handleCanvasClick]);
 
-  // Effect to handle cleanup on unmount
+  // Effect to handle cleanup on unmount (only on component unmount)
   useEffect(() => {
     return () => {
       cleanupCanvasListeners();
+      // Clean up WebSocket subscription and connection on component unmount
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+      disconnectStomp();
     };
-  }, [cleanupCanvasListeners]);
+  }, []); // Empty dependency array to ensure this only runs on unmount
 
   // Función para obtener los blueprints de un autor
   const handleGetBlueprints = async () => {
@@ -375,7 +374,7 @@ const Blueprints = () => {
         setBlueprints((prevBlueprints) => [...prevBlueprints, blueprintToSave]);
       } else {
         const updatedBlueprints = blueprints.map((bp) =>
-          bp.name === name ? { ...bp, points: updatedPoints } : bp
+          bp.name === name ? { ...bp, points: blueprintToSave.points } : bp
         );
         setBlueprints(updatedBlueprints);
       }
@@ -434,14 +433,54 @@ const Blueprints = () => {
     [blueprints]
   );
 
-  const openModal = useCallback((blueprint: Blueprint) => {
+  const openModal = useCallback(async (blueprint: Blueprint) => {
     setSelectedBlueprint(blueprint);
     setModalIsOpen(true);
+
+    try {
+      // Connect to WebSocket and subscribe to the dynamic topic
+      await connectStomp();
+      const unsubscribe = await subscribeToNewPoints(
+        blueprint.author,
+        blueprint.name,
+        (point: Point) => {
+          console.log("Received collaborative point:", point);
+
+          // Prevent re-adding the same point
+          if (
+            lastSentPoint.current &&
+            lastSentPoint.current.x === point.x &&
+            lastSentPoint.current.y === point.y
+          ) {
+            console.log("Ignoring point sent by this client");
+            lastSentPoint.current = null;
+            return;
+          }
+
+          // Only add point if it's not a duplicate
+          setCollaborativePoints((prevPoints) => [...prevPoints, point]);
+        }
+      );
+      unsubscribeRef.current = unsubscribe;
+      console.log(
+        `Subscribed to /topic/newpoint/${blueprint.author}/${blueprint.name}`
+      );
+    } catch (error) {
+      console.error("Failed to connect and subscribe:", error);
+      setError("No se pudo conectar al servidor WebSocket");
+    }
   }, []);
 
   const closeModal = useCallback(() => {
     setModalIsOpen(false);
     cleanupCanvasListeners();
+
+    // Clean up WebSocket subscription
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+      unsubscribeRef.current = null;
+    }
+
     if (blueprintModified) {
       if (
         window.confirm("¿Desea guardar los cambios realizados al blueprint?")
