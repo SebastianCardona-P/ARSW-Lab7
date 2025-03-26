@@ -5,13 +5,14 @@ import edu.eci.arsw.blueprints.persistence.*;
 import edu.eci.arsw.blueprints.services.*;
 import org.springframework.beans.factory.annotation.*;
 import org.springframework.http.*;
+import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.RequestBody;
-
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 /**
  * Controlador REST para gestionar los blueprints.
@@ -23,6 +24,9 @@ public class BluePrintController {
 
     @Autowired
     private final BlueprintsServices bps;
+
+    @Autowired
+    private SimpMessagingTemplate simpMessagingTemplate;
 
     /**
      * Constructor de BluePrintController.
@@ -133,5 +137,15 @@ public class BluePrintController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred.");
         }
+    }
+
+
+    /**
+     * Endpoint STOMP para recibir un nuevo punto y enviarlo a todos los suscriptores
+     */
+    @MessageMapping("/newpoint") // El destino para recibir el mensaje
+    public void handleNewPoint(Point point) {
+        // Enviar el punto a todos los suscriptores del topic "/topic/newpoint"
+        simpMessagingTemplate.convertAndSend("/topic/newpoint", point);
     }
 }

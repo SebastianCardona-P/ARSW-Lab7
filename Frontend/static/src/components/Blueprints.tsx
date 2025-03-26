@@ -1,5 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import Modal from "react-modal";
+import {
+  connectStomp,
+  subscribeToNewPoints,
+  sendPoint,
+  disconnectStomp,
+} from "./StompClient";
 import "./Blueprints.css";
 
 Modal.setAppElement("#root");
@@ -28,7 +34,33 @@ const Blueprints = () => {
   const [blueprintModified, setBlueprintModified] = useState<boolean>(false);
   const [isCreatingNewBlueprint, setIsCreatingNewBlueprint] =
     useState<boolean>(false);
+  const [collaborativePoints, setCollaborativePoints] = useState<Point[]>([]);
   const canvasReference = useRef<HTMLCanvasElement | null>(null);
+  const lastSentPoint = useRef<Point | null>(null);
+
+  // Connect to WebSocket when component mounts
+  useEffect(() => {
+    connectStomp();
+
+    const unsubscribe = subscribeToNewPoints((point: Point) => {
+      console.log("Received collaborative point:", point);
+      if (
+        lastSentPoint.current &&
+        lastSentPoint.current.x === point.x &&
+        lastSentPoint.current.y === point.y
+      ) {
+        console.log("Ignoring point sent by this client");
+        lastSentPoint.current = null;
+        return;
+      }
+      setCollaborativePoints((prevPoints) => [...prevPoints, point]);
+    });
+
+    return () => {
+      unsubscribe(); // Clean up subscription
+      disconnectStomp();
+    };
+  }, []);
 
   // scaleParams to store scaling parameters
   const scaleParams = useRef({
@@ -42,6 +74,7 @@ const Blueprints = () => {
   useEffect(() => {
     if (selectedBlueprint) {
       setUpdatedPoints([...selectedBlueprint.points]);
+      setCollaborativePoints([]);
       setBlueprintModified(false);
     }
   }, [selectedBlueprint]);
@@ -96,8 +129,12 @@ const Blueprints = () => {
 
       console.log(`Adding new point: x=${newPoint.x}, y=${newPoint.y}`);
 
-      // Add the new point to the updated points
-      setUpdatedPoints((prevPoints) => [...prevPoints, newPoint]);
+      // Store the point as the last sent point to avoid duplicates
+      lastSentPoint.current = newPoint;
+
+      // Publish point to WebSocket
+      sendPoint(newPoint);
+
       setBlueprintModified(true);
     },
     [selectedBlueprint, isCreatingNewBlueprint]
@@ -107,7 +144,7 @@ const Blueprints = () => {
   const drawBlueprint = useCallback(
     (points: Point[]) => {
       const canvas = canvasReference.current;
-      if (!canvas || points.length === 0) return;
+      if (!canvas) return;
 
       const ctx: CanvasRenderingContext2D = canvas.getContext(
         "2d"
@@ -116,17 +153,26 @@ const Blueprints = () => {
       // Clear the canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // Combine local and collaborative points
+      const allPoints = [...points, ...collaborativePoints];
+
+      if (allPoints.length === 0) return;
+
       // Calculate scaling
       const margin = 10;
-      const Yvalues = points.map((point) => point.y);
-      const Xvalues = points.map((point) => point.x);
+      const Yvalues = allPoints.map((point) => point.y);
+      const Xvalues = allPoints.map((point) => point.x);
       const maxY = Math.max(...Yvalues);
       const minY = Math.min(...Yvalues);
       const maxX = Math.max(...Xvalues);
       const minX = Math.min(...Xvalues);
 
       // Special handling for new blueprint with no points
-      if (isCreatingNewBlueprint && points.length === 0) {
+      if (
+        isCreatingNewBlueprint &&
+        points.length === 0 &&
+        collaborativePoints.length === 0
+      ) {
         scaleParams.current = {
           minX: 0,
           minY: 0,
@@ -161,10 +207,10 @@ const Blueprints = () => {
       // Draw the blueprint
       ctx.beginPath();
       ctx.moveTo(
-        transcoord(points[0].x, minX, scale),
-        transcoord(points[0].y, minY, scale)
+        transcoord(allPoints[0].x, minX, scale),
+        transcoord(allPoints[0].y, minY, scale)
       );
-      points.slice(1).forEach((point) => {
+      allPoints.slice(1).forEach((point) => {
         ctx.lineTo(
           transcoord(point.x, minX, scale),
           transcoord(point.y, minY, scale)
@@ -175,7 +221,7 @@ const Blueprints = () => {
       ctx.stroke();
 
       // Draw the points
-      points.forEach((point, index) => {
+      allPoints.forEach((point, index) => {
         ctx.beginPath();
         ctx.arc(
           transcoord(point.x, minX, scale),
@@ -189,7 +235,7 @@ const Blueprints = () => {
         let fillColor = "#e74c3c"; // Default red
         if (index === 0) {
           fillColor = "#2ecc71"; // First point green
-        } else if (index === points.length - 1 && blueprintModified) {
+        } else if (index === allPoints.length - 1 && blueprintModified) {
           fillColor = "#3498db"; // Last point blue if recently added
         }
 
@@ -197,7 +243,7 @@ const Blueprints = () => {
         ctx.fill();
       });
     },
-    [blueprintModified, isCreatingNewBlueprint]
+    [blueprintModified, isCreatingNewBlueprint, collaborativePoints]
   );
 
   // New function to handle creating a new blueprint
@@ -222,6 +268,7 @@ const Blueprints = () => {
         points: [],
       });
       setUpdatedPoints([]);
+      setCollaborativePoints([]);
       setBlueprintModified(false);
       setIsCreatingNewBlueprint(true);
 
@@ -235,7 +282,7 @@ const Blueprints = () => {
     if (updatedPoints.length > 0) {
       drawBlueprint(updatedPoints);
     }
-  }, [updatedPoints, drawBlueprint]);
+  }, [updatedPoints, collaborativePoints, drawBlueprint]);
 
   // Setup event listeners when the modal is opened
   const setupCanvasListeners = useCallback(() => {
@@ -318,7 +365,7 @@ const Blueprints = () => {
     const blueprintToSave = {
       author: author,
       name: name,
-      points: updatedPoints,
+      points: [...updatedPoints, ...collaborativePoints],
     };
 
     try {
@@ -365,6 +412,7 @@ const Blueprints = () => {
       // Reset state
       setBlueprintModified(false);
       setIsCreatingNewBlueprint(false);
+      setCollaborativePoints([]);
 
       handleGetBlueprints();
 
@@ -378,8 +426,8 @@ const Blueprints = () => {
     selectedBlueprint,
     blueprintModified,
     updatedPoints,
+    collaborativePoints,
     blueprints,
-    totalPoints,
     isCreatingNewBlueprint,
   ]);
 
@@ -420,23 +468,6 @@ const Blueprints = () => {
     },
     [blueprints]
   );
-
-  // Función para deshacer el último punto añadido
-  const undoLastPoint = useCallback(() => {
-    if (updatedPoints.length <= 1 || !selectedBlueprint) return;
-
-    if (updatedPoints.length <= selectedBlueprint.points.length) {
-      // No hay puntos añadidos para deshacer
-      return;
-    }
-
-    const newPoints = updatedPoints.slice(0, -1);
-    setUpdatedPoints(newPoints);
-    setBlueprintModified(newPoints.length !== selectedBlueprint.points.length);
-
-    // Redibujar el blueprint
-    drawBlueprint(newPoints);
-  }, [updatedPoints, selectedBlueprint, drawBlueprint]);
 
   const openModal = useCallback((blueprint: Blueprint) => {
     setSelectedBlueprint(blueprint);
@@ -564,13 +595,6 @@ const Blueprints = () => {
               }}
             >
               <div>
-                <button
-                  onClick={undoLastPoint}
-                  disabled={!blueprintModified}
-                  style={{ marginRight: "10px" }}
-                >
-                  Deshacer último punto
-                </button>
                 <button
                   onClick={saveUpdatedBlueprint}
                   disabled={!blueprintModified}
