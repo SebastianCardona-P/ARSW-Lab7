@@ -1,6 +1,8 @@
 import { Client, IMessage } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
+
+
 const socketUrl = "http://localhost:8080/ws";
 
 const stompClient = new Client({
@@ -37,13 +39,26 @@ const waitForConnection = () => {
 };
 
 export const connectStomp = async () => {
-  if (!stompClient.active) {
+  return new Promise<void>((resolve, reject) => {
+    if (stompClient.connected) {
+      console.log("STOMP client is already connected");
+      resolve();
+      return;
+    }
+
     console.log("Activating STOMP client...");
+    stompClient.onConnect = () => {
+      console.log("STOMP client connected");
+      resolve();
+    };
+
+    stompClient.onStompError = (frame) => {
+      console.error("STOMP connection error:", frame);
+      reject(new Error("Failed to connect to STOMP: " + frame));
+    };
+
     stompClient.activate();
-    await waitForConnection();
-  } else {
-    console.log("STOMP client is already active");
-  }
+  });
 };
 
 export const subscribeToNewPoints = async (
@@ -111,6 +126,42 @@ export const sendPoint = async (
     console.error("STOMP client failed to connect, cannot send point:", point);
   }
 };
+
+export const subscribeToNewPolygons = async (
+  author: string,
+  blueprintName: string,
+  callback: (points: { x: number; y: number }[]) => void
+): Promise<() => void> => {
+  try {
+    await connectStomp(); 
+
+    if (!stompClient.connected) {
+      throw new Error("STOMP client is not connected after attempting to connect.");
+    }
+
+    const topic = `/topic/newpolygon/${author}/${blueprintName}`;
+    console.log(`Subscribing to polygon topic: ${topic}`);
+
+    const subscription = stompClient.subscribe(topic, (message: IMessage) => {
+      try {
+        const points = JSON.parse(message.body) as { x: number; y: number }[];
+        console.log(`Received polygon with ${points.length} points`);
+        callback(points);
+      } catch (error) {
+        console.error("Error parsing polygon points:", error);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+      console.log(`Unsubscribed from polygon topic: ${topic}`);
+    };
+  } catch (error) {
+    console.error("Error setting up polygon subscription:", error);
+    return () => {};
+  }
+};
+
 
 export const disconnectStomp = () => {
   if (stompClient.active) {

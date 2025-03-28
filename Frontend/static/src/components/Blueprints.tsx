@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import PolygonHandler from './PolygonHandler';
 import Modal from "react-modal";
 import {
   connectStomp,
@@ -583,6 +584,13 @@ const Blueprints = () => {
                 zIndex: 10,
               }}
             ></canvas>
+            {selectedBlueprint && (
+              <PolygonHandler
+                author={selectedBlueprint.author}
+                blueprintName={selectedBlueprint.name}
+                canvasRef={canvasReference}
+              />
+            )}
             <div
               className="buttons"
               style={{

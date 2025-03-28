@@ -43,3 +43,23 @@
   justify-content: space-between;
   width: 100%;
 }
+
+.polygon-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.polygon-controls button {
+  padding: 5px 10px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.polygon-controls button:disabled {
+  background-color: #95a5a6;
+  cursor: not-allowed;
+}

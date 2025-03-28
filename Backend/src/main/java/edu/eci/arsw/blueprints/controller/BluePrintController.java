@@ -9,6 +9,11 @@ import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.List;
+import java.util.ArrayList;
+
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,6 +27,8 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 @RequestMapping( "/blueprints")
 @Tag(name = "Blueprints", description = "API para gestionar blueprints")
 public class BluePrintController {
+
+    private ConcurrentHashMap<String, ArrayList<Point>> drawingPoints= new ConcurrentHashMap<>();
 
     @Autowired
     private final BlueprintsServices bps;
@@ -139,18 +146,46 @@ public class BluePrintController {
     }
 
 
-    /**
-     * Endpoint STOMP para recibir un nuevo punto y enviarlo a todos los suscriptores
-     * del topic "/topic/newpoint/{author}/{name}".
-     * @param author Nombre del autor.
-     * @param name Nombre del blueprint.
-     * @param point Punto a enviar.
-     */
-    @MessageMapping("/newpoint/{author}/{name}") // El destino para recibir el mensaje
-    public void handleNewPoint(@DestinationVariable("author") String author, @DestinationVariable("name") String name, Point point) {
-        // Enviar el punto a todos los suscriptores del topic "/topic/newpoint/{author}/{name}"
-        System.out.println("Enviando punto: " + point + " a /topic/newpoint/" + author + "/" + name);
+//    /**
+//     * Endpoint STOMP para recibir un nuevo punto y enviarlo a todos los suscriptores
+//     * del topic "/topic/newpoint/{author}/{name}".
+//     * @param author Nombre del autor.
+//     * @param name Nombre del blueprint.
+//     * @param point Punto a enviar.
+//     */
+//    @MessageMapping("/newpoint/{author}/{name}") // El destino para recibir el mensaje
+//    public void handleNewPoint(
+//            @DestinationVariable("author") String author,
+//            @DestinationVariable("name") String name,
+//            Point point) {
+//        // Enviar el punto a todos los suscriptores del topic "/topic/newpoint/{author}/{name}"
+//        System.out.println("Enviando punto: " + point + " a /topic/newpoint/" + author + "/" + name);
+//
+//        simpMessagingTemplate.convertAndSend("/topic/newpoint/" + author + "/" + name, point);
+//    }
 
+    /**
+     * Endpoint STOMP unificado para manejo de puntos y polígonos
+     */
+    @MessageMapping("/newpoint/{author}/{name}")
+    public void handlePoint(
+            @DestinationVariable("author") String author,
+            @DestinationVariable("name") String name,
+            Point point) {
+        String numdibujo =author+name;
+        System.out.println(point.getX());
+        System.out.println( point.getY());
+        if (drawingPoints.containsKey(numdibujo)){
+            drawingPoints.get(numdibujo).add(point);
+        } else {
+            ArrayList<Point> arrayList = new ArrayList<>();
+            arrayList.add(point);
+            drawingPoints.put(numdibujo, arrayList);
+        }
         simpMessagingTemplate.convertAndSend("/topic/newpoint/" + author + "/" + name, point);
+        if (drawingPoints.get(numdibujo).size() >= 4){
+            simpMessagingTemplate.convertAndSend("/topic/newpolygon/" + author + "/" + name, drawingPoints.get(numdibujo));
+            drawingPoints.put(numdibujo, new ArrayList<>());
+        }
     }
 }
